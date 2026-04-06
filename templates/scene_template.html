@@ -1,0 +1,1034 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #080d18;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+#scene-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 640px;
+  margin: auto;
+  overflow: hidden;
+  border-radius: 12px;
+  background: radial-gradient(ellipse at 50% 30%, #102243 0%, #040b18 100%);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+/* cinematic vignette */
+#scene-wrap::after {
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background: radial-gradient(ellipse at center, transparent 58%, rgba(0,0,0,0.55) 100%);
+  z-index:10;
+}
+
+canvas#room {
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+}
+
+/* ─── MODE OVERLAY ─── */
+#mode-overlay {
+  position:absolute;
+  top:14px;
+  left:50%;
+  transform:translateX(-50%);
+  text-align:center;
+  pointer-events:none;
+  z-index:30;
+}
+#mode-name {
+  font-size:15px;
+  font-weight:700;
+  letter-spacing:2.5px;
+  color:#fff;
+  text-transform:uppercase;
+  text-shadow:0 2px 20px rgba(0,0,0,0.9);
+}
+#mode-sub {
+  font-size:10px;
+  color:rgba(255,255,255,0.45);
+  margin-top:4px;
+  letter-spacing:1px;
+}
+
+/* ─── AUTO BRIGHTNESS BADGE ─── */
+#bright-badge {
+  position:absolute;
+  top:14px;
+  right:14px;
+  z-index:30;
+  background:rgba(0,0,0,0.55);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:8px;
+  padding:6px 10px;
+  text-align:right;
+  pointer-events:none;
+  backdrop-filter:blur(8px);
+}
+#bright-val {
+  font-size:18px;
+  font-weight:700;
+  color:#fff;
+  line-height:1;
+}
+#bright-lbl {
+  font-size:8px;
+  color:rgba(255,255,255,0.4);
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  margin-top:2px;
+}
+#bright-bar-wrap {
+  width:64px;
+  height:3px;
+  background:rgba(255,255,255,0.1);
+  border-radius:2px;
+  margin-top:4px;
+}
+#bright-bar {
+  height:100%;
+  border-radius:2px;
+  background:linear-gradient(to right,#3b82f6,#06b6d4);
+  transition:width 0.8s cubic-bezier(.4,0,.2,1);
+}
+
+/* ─── FOOTER STATS ─── */
+#stats-row {
+  position:absolute;
+  bottom:0;
+  width:100%;
+  height:54px;
+  display:flex;
+  background:linear-gradient(to top, rgba(4,8,18,0.97), rgba(4,8,18,0.55));
+  backdrop-filter:blur(12px);
+  border-top:1px solid rgba(255,255,255,0.05);
+  z-index:20;
+}
+.stat {
+  flex:1;
+  text-align:center;
+  padding-top:7px;
+  border-right:1px solid rgba(255,255,255,0.05);
+}
+.stat:last-child { border-right:none; }
+.stat-val {
+  font-size:15px;
+  font-weight:700;
+  color:#fff;
+  font-variant-numeric:tabular-nums;
+  transition:color 0.5s;
+}
+.stat-lbl {
+  font-size:8px;
+  color:rgba(255,255,255,0.3);
+  margin-top:3px;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+}
+
+/* ─── CAPACITY BAR ─── */
+#capacity-wrap {
+  position:absolute;
+  left:14px;
+  top:14px;
+  z-index:30;
+  pointer-events:none;
+}
+#cap-bar-bg {
+  width:3px;
+  height:70px;
+  background:rgba(255,255,255,0.08);
+  border-radius:2px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column-reverse;
+}
+#cap-bar-fill {
+  width:100%;
+  border-radius:2px;
+  background:linear-gradient(to top,#10b981,#3b82f6);
+  transition:height 0.8s cubic-bezier(.4,0,.2,1);
+}
+#cap-label {
+  font-size:8px;
+  color:rgba(255,255,255,0.35);
+  letter-spacing:1px;
+  margin-top:5px;
+  writing-mode:vertical-rl;
+  transform:rotate(180deg);
+  text-transform:uppercase;
+}
+    </style>
+  </head>
+  <body>
+    <div id="scene-wrap">
+      <canvas id="room"></canvas>
+
+      <div id="mode-overlay">
+        <div id="mode-name">LECTURE MODE</div>
+        <div id="mode-sub">Full brightness · No projector</div>
+      </div>
+
+      <!-- Auto Brightness Badge (top-right) -->
+      <div id="bright-badge">
+        <div id="bright-val">100%</div>
+        <div id="bright-lbl">Auto Brightness</div>
+        <div id="bright-bar-wrap"><div id="bright-bar" style="width:100%"></div></div>
+      </div>
+
+      <!-- Capacity bar (top-left) -->
+      <div id="capacity-wrap">
+        <div id="cap-bar-bg"><div id="cap-bar-fill" style="height:100%"></div></div>
+        <div id="cap-label">Cap</div>
+      </div>
+
+      <div id="stats-row">
+        <div class="stat">
+          <div class="stat-val" id="st-lux">300</div>
+          <div class="stat-lbl">Lux</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="st-people">50</div>
+          <div class="stat-lbl">People</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="st-bright">100%</div>
+          <div class="stat-lbl">Brightness</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="st-proj">OFF</div>
+          <div class="stat-lbl">Projector</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="st-save">10%</div>
+          <div class="stat-lbl">Saving</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* ═══════════════════════════════════════════════
+         AUTO BRIGHTNESS ENGINE
+         Maps people_count (0-50) → brightness (10-100%)
+        Anchored curve: 0→10%, 25→60%, 50→100%
+      ═══════════════════════════════════════════════ */
+      function autoBrightnessLevel(peopleCount) {
+        const MAX_PEOPLE = 50;
+        const MIN_BRIGHT = 10;   // 10% — empty room
+        const MAX_BRIGHT = 100;  // 100% — full room
+        const clamped = Math.max(0, Math.min(MAX_PEOPLE, peopleCount));
+        // Fit through anchor points: (0,10), (25,60), (50,100)
+        const brightness = (-0.008 * clamped * clamped) + (2.2 * clamped) + 10;
+        return Math.round(Math.max(MIN_BRIGHT, Math.min(MAX_BRIGHT, brightness)));
+      }
+
+      /* ═══════════════════════════════════════════════
+         MODE DEFINITIONS
+      ═══════════════════════════════════════════════ */
+      const MODES = {
+        PRESENT_MODE: {
+          name:"PRESENT MODE",
+          sub:"Projector on · Dim front lights",
+          accent:"#8B5CF6",
+          ambientTop:"#14092e", ambientBot:"#0a0618",
+          wallColor:"#1a0f38", floorColor:"#100c24", ceilColor:"#0a0618",
+          lights:[0.10, 0.65, 0.65, 0.10],
+          lightColor:[110,90,255],
+          projOn:true, projHue:[85,95,210],
+          students:50, studentColor:[195,155,120],
+          lux:250, saving:45,
+        },
+        LECTURE_MODE: {
+          name:"LECTURE MODE",
+          sub:"Full brightness · No projector",
+          accent:"#3B82F6",
+          ambientTop:"#0c1a3d", ambientBot:"#081025",
+          wallColor:"#0f1e42", floorColor:"#0a1228", ceilColor:"#080e1e",
+          lights:[0.88, 1.0, 1.0, 0.88],
+          lightColor:[185,215,255],
+          projOn:false, projHue:[20,30,60],
+          students:50, studentColor:[200,160,125],
+          lux:300, saving:10,
+        },
+        GROUP_MODE: {
+          name:"GROUP MODE",
+          sub:"Even lighting · Collaboration",
+          accent:"#10B981",
+          ambientTop:"#051e10", ambientBot:"#030e08",
+          wallColor:"#062010", floorColor:"#041208", ceilColor:"#020a05",
+          lights:[0.72, 0.72, 0.72, 0.72],
+          lightColor:[120,255,180],
+          projOn:false, projHue:[15,50,25],
+          students:20, studentColor:[195,155,120],
+          lux:350, saving:25,
+        },
+        AUTO_DIM: {
+          name:"AUTO DIM",
+          sub:"Natural light detected · Dimming",
+          accent:"#F59E0B",
+          ambientTop:"#1a1205", ambientBot:"#100c02",
+          wallColor:"#1e1508", floorColor:"#120e04", ceilColor:"#0e0a02",
+          lights:[0.32, 0.10, 0.10, 0.32],
+          lightColor:[255,220,100],
+          projOn:false, projHue:[40,30,10],
+          students:30, studentColor:[200,160,120],
+          lux:600, saving:50,
+        },
+        ENERGY_SAVE: {
+          name:"ENERGY SAVE",
+          sub:"Few people · Most lights off",
+          accent:"#06B6D4",
+          ambientTop:"#041420", ambientBot:"#020a14",
+          wallColor:"#051525", floorColor:"#030d18", ceilColor:"#020810",
+          lights:[0.0, 0.42, 0.0, 0.0],
+          lightColor:[80,220,255],
+          projOn:false, projHue:[15,35,50],
+          students:3, studentColor:[185,148,115],
+          lux:200, saving:70,
+        },
+        MORNING_MODE: {
+          name:"MORNING MODE",
+          sub:"Early class · Warm sunrise light",
+          accent:"#EC4899",
+          ambientTop:"#300818", ambientBot:"#1e0410",
+          wallColor:"#38091e", floorColor:"#220510", ceilColor:"#180308",
+          lights:[0.82, 1.0, 1.0, 0.82],
+          lightColor:[255,165,205],
+          projOn:false, projHue:[50,20,35],
+          students:15, studentColor:[205,162,128],
+          lux:150, saving:20,
+        },
+      };
+
+      /* Template variable overrides from Streamlit */
+      MODES["PRESENT_MODE"].projOn  = __PRESENT_PROJ_ON__;
+      MODES["__CUR_MODE__"].projOn  = __CUR_PROJ_ON__;
+      MODES["__CUR_MODE__"].lux     = __CUR_LUX__;
+      MODES["__CUR_MODE__"].saving  = __CUR_SAVING__;
+      /* ⚠️ ไม่ set .students ใน MODES — ส่งตรงผ่าน setMode() แทน */
+      const INIT_PEOPLE = __CUR_PEOPLE__;   /* จำนวนคนจาก Streamlit slider */
+      const CUR_TEACHER = (__CUR_TEACHER__ || "").trim();
+      const INIT_BRIGHT = __CUR_BRIGHT__;   /* Auto brightness จาก backend */
+
+      /* ═══════════════════════════════════════════════
+         HELPERS
+      ═══════════════════════════════════════════════ */
+      function lerp(a,b,t){ return a+(b-a)*t; }
+      function lerpColor(a,b,t){ return [lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]; }
+      function rgb(c){ return `rgb(${~~c[0]},${~~c[1]},${~~c[2]})`; }
+      function rgba(c,a){ return `rgba(${~~c[0]},${~~c[1]},${~~c[2]},${a})`; }
+      function hex2rgb(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+
+      /* ═══════════════════════════════════════════════
+         SEAT LAYOUT — 5 rows × 10 cols = 50 seats
+         Back-of-room perspective: row 0 = back (close, large)
+                                   row 4 = front (far, small)
+      ═══════════════════════════════════════════════ */
+      function buildSeatSlots() {
+        const ROWS = 5, COLS = 10;
+        const slots = [];
+        for (let r = 0; r < ROWS; r++) {
+          // row 0 = back (near viewer), row 4 = front (near board)
+          const frontDepth = r / (ROWS - 1);      // 0..1: back -> front
+          const baseY  = 0.73 - frontDepth * 0.25;
+          const left   = 0.10 + frontDepth * 0.06;
+          const right  = 0.90 - frontDepth * 0.06;
+          // Near viewer should be larger than far/front rows.
+          const z      = 0.96 - frontDepth * 0.56;
+          for (let c = 0; c < COLS; c++) {
+            const t = c / (COLS - 1);
+            slots.push({ x: left + (right-left)*t, y: baseY, z, row:r, col:c });
+          }
+        }
+        // Sort by y so back rows draw first (painter's algorithm)
+        slots.sort((a,b) => a.y - b.y);
+        return slots;
+      }
+      const SEAT_SLOTS = buildSeatSlots();
+
+      /* ═══════════════════════════════════════════════
+         CANVAS SETUP
+      ═══════════════════════════════════════════════ */
+      const canvas = document.getElementById("room");
+      const ctx    = canvas.getContext("2d");
+      function resize(){
+        const w = canvas.parentElement.clientWidth;
+        const h = canvas.parentElement.clientHeight;
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        canvas.width  = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        draw();
+      }
+
+      /* ═══════════════════════════════════════════════
+         MAIN DRAW
+      ═══════════════════════════════════════════════ */
+      function draw() {
+        const m = anim;
+        const W = canvas.clientWidth, H = canvas.clientHeight;
+        const tNow = performance.now() * 0.0014;
+        ctx.clearRect(0,0,W,H);
+
+        const bg1  = m.ambientTop || [10,16,40];
+        const bg2  = m.ambientBot || [6,10,25];
+        const wall = m.wallColor  || [15,30,65];
+        const ceil = m.ceilColor  || [8,14,30];
+        const floor= m.floorColor || [10,18,40];
+        const lc   = m.lightColor || [180,210,255];
+        const projectorActive = m.projOn>0.5;
+        const projectorFactor = 1.0;
+        const ceilBase  = projectorActive ? lerpColor(ceil,  [0,0,0], 0.42) : ceil;
+        const wallBase  = projectorActive ? lerpColor(wall,  [0,0,0], 0.38) : wall;
+        const floorBase = projectorActive ? lerpColor(floor, [0,0,0], 0.44) : floor;
+        const globalIllum = (m.lights[0]+m.lights[1]+m.lights[2]+m.lights[3])/4;
+
+        // Vanishing point — front of room (viewer stands at back)
+        const vx = W*0.5, vy = H*0.18;
+
+        // Corner points from viewer perspective
+        const tl = {x:W*0.05, y:H*0.04}, tr = {x:W*0.95, y:H*0.04};
+        const bl = {x:W*0.0,  y:H*0.84}, br = {x:W*1.0,  y:H*0.84};
+        const vp = {x:vx, y:vy};
+
+        // ── 1. CEILING ──────────────────────────────
+        const ceilGrad = ctx.createLinearGradient(W*0.5,0,W*0.5,vy);
+        ceilGrad.addColorStop(0, rgb(ceilBase));
+        ceilGrad.addColorStop(1, rgba(bg1, projectorActive ? 0.88 : 0.6));
+        ctx.beginPath();
+        ctx.moveTo(tl.x,tl.y);
+        ctx.lineTo(tr.x,tr.y);
+        ctx.lineTo(vp.x,vy);
+        ctx.fillStyle = ceilGrad;
+        ctx.fill();
+
+        // ── 2. LEFT WALL ─────────────────────────────
+        const lWG = ctx.createLinearGradient(0,H*0.5,vx,vy);
+        lWG.addColorStop(0, rgb(lerpColor(wallBase,bg1,0.08)));
+        lWG.addColorStop(1, rgb(lerpColor(wallBase,[0,0,0],0.72)));
+        ctx.beginPath();
+        ctx.moveTo(tl.x,tl.y);
+        ctx.lineTo(vp.x,vy);
+        ctx.lineTo(bl.x,bl.y);
+        ctx.fillStyle = lWG;
+        ctx.fill();
+
+        // ── 3. RIGHT WALL ────────────────────────────
+        const rWG = ctx.createLinearGradient(W,H*0.5,vx,vy);
+        rWG.addColorStop(0, rgb(lerpColor(wallBase,bg1,0.05)));
+        rWG.addColorStop(1, rgb(lerpColor(wallBase,[0,0,0],0.82)));
+        ctx.beginPath();
+        ctx.moveTo(tr.x,tr.y);
+        ctx.lineTo(vp.x,vy);
+        ctx.lineTo(br.x,br.y);
+        ctx.fillStyle = rWG;
+        ctx.fill();
+
+        // ── 4. FLOOR ─────────────────────────────────
+        const flG = ctx.createRadialGradient(vx,H*0.85,W*0.05,vx,H*0.6,W*0.85);
+        flG.addColorStop(0, rgb(lerpColor(floorBase,lc,globalIllum*0.18)));
+        flG.addColorStop(1, rgb(lerpColor(floorBase,[0,0,5],0.48)));
+        ctx.beginPath();
+        ctx.moveTo(bl.x,bl.y);
+        ctx.lineTo(br.x,br.y);
+        ctx.lineTo(tr.x,tr.y); // connect through corners
+        ctx.lineTo(tl.x,tl.y);
+        ctx.fillStyle = flG;
+        ctx.fill();
+
+        // Edge lines
+        ctx.strokeStyle = rgba(lerpColor(wall,[255,255,255],0.28),0.12);
+        ctx.lineWidth = 1.5;
+        [[vp,{x:bl.x,y:bl.y}],[vp,{x:br.x,y:br.y}]].forEach(([a,b])=>{
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+        });
+
+        // ── 5. FRONT WALL (with board + projector screen) ────────────────────
+        // Front wall is the far end visible through vanishing point
+        const fwTop = vy, fwBot = H*0.60;
+        const fwLeft  = vx - W*0.28;
+        const fwRight = vx + W*0.28;
+
+        // Front wall fill
+        const fwG = ctx.createLinearGradient(vx,fwTop,vx,fwBot);
+        fwG.addColorStop(0, rgba(lerpColor(wallBase,bg1,0.2),projectorActive ? 0.92 : 0.95));
+        fwG.addColorStop(1, rgba(lerpColor(wallBase,[0,0,0],0.5),projectorActive ? 0.84 : 0.9));
+        ctx.fillStyle = fwG;
+        ctx.beginPath();
+        ctx.moveTo(fwLeft-20, fwTop-4);
+        ctx.lineTo(fwRight+20, fwTop-4);
+        ctx.lineTo(fwRight+30, fwBot);
+        ctx.lineTo(fwLeft-30, fwBot);
+        ctx.fill();
+
+        // ── 6. PROJECTOR SCREEN (front wall, above center) ──────────────────
+        const ph = m.projHue || [20,30,55];
+        const psW = W*0.22, psH = H*0.14;
+        const psX = vx - psW/2, psY = fwTop + H*0.018;
+        const flicker = m.projOn>0.5 ? 0.96+0.04*Math.sin(tNow*14) : 0;
+
+        if (m.projOn > 0.5) {
+          // Volumetric projector beam from ceiling down to screen
+          const beam = ctx.createLinearGradient(vx, H*0.04, vx, psY);
+          beam.addColorStop(0, rgba([255,255,255], 0.92*flicker));
+          beam.addColorStop(0.22, rgba([245,250,255], 0.72*flicker));
+          beam.addColorStop(0.55, rgba(ph, 0.22*flicker));
+          beam.addColorStop(0.82, rgba(ph, 0.06*flicker));
+          beam.addColorStop(1, rgba(ph, 0));
+          ctx.beginPath();
+          ctx.moveTo(vx-W*0.022, H*0.03);
+          ctx.lineTo(vx+W*0.022, H*0.03);
+          ctx.lineTo(psX+psW*0.92, psY);
+          ctx.lineTo(psX+psW*0.08, psY);
+          ctx.fillStyle = beam;
+          ctx.fill();
+
+          // Screen glow + bloom
+          ctx.shadowColor = rgba([255,255,255], 1.0*flicker);
+          ctx.shadowBlur  = 145;
+          const pg = ctx.createLinearGradient(psX,psY,psX+psW,psY+psH);
+          pg.addColorStop(0, rgba([255,255,255],1.0));
+          pg.addColorStop(0.35, rgba([248,252,255],0.98));
+          pg.addColorStop(0.7, rgba(lerpColor(ph,[255,255,255],0.72),0.94));
+          pg.addColorStop(1, rgba(ph,0.90));
+          ctx.fillStyle = pg;
+          ctx.fillRect(psX, psY, psW, psH);
+
+          // Extra bloom layer so the projector feels like a bright screen
+          ctx.shadowColor = rgba([255,255,255], 0.95*flicker);
+          ctx.shadowBlur  = 95;
+          ctx.fillStyle = rgba([255,255,255], 0.12*flicker);
+          ctx.fillRect(psX-2, psY-2, psW+4, psH+4);
+          ctx.shadowBlur = 0;
+
+          // Scanlines
+          ctx.save();
+          ctx.beginPath(); ctx.rect(psX,psY,psW,psH); ctx.clip();
+          for (let sy=0; sy<psH; sy+=2.5){
+            ctx.fillStyle = `rgba(0,0,0,${0.035+0.025*Math.sin(sy*2-tNow*8)})`;
+            ctx.fillRect(psX,psY+sy,psW,1.5);
+          }
+          // Screen content lines
+          for (let li=0;li<4;li++){
+            const lw = li===0 ? psW*0.68 : psW*(0.28+Math.random()*0.28);
+            ctx.fillStyle = rgba([255,255,255],(li===0?0.82:0.46)*flicker);
+            ctx.fillRect(psX+psW*0.09, psY+psH*(0.22+li*0.18), lw, psH*0.042);
+          }
+          ctx.restore();
+
+          // Floor reflection
+          const refG = ctx.createLinearGradient(vx,H*0.65,vx,H*0.80);
+          refG.addColorStop(0, rgba([255,255,255],0.72*flicker));
+          refG.addColorStop(0.45, rgba(ph,0.34*flicker));
+          refG.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = refG;
+          ctx.beginPath();
+          ctx.moveTo(psX+psW*0.1,H*0.65);
+          ctx.lineTo(psX+psW*0.9,H*0.65);
+          ctx.lineTo(psX+psW*0.7,H*0.80);
+          ctx.lineTo(psX+psW*0.3,H*0.80);
+          ctx.fill();
+        } else {
+          // Off screen
+          ctx.fillStyle = rgba(lerpColor(ph,[0,0,0],0.6),0.28);
+          ctx.fillRect(psX,psY,psW,psH);
+        }
+        // Screen bezel
+        ctx.strokeStyle = rgba([120,140,200],0.35);
+        ctx.lineWidth = 1.8;
+        ctx.strokeRect(psX,psY,psW,psH);
+
+        // SCREEN label
+        ctx.fillStyle = rgba([200,220,255],0.2);
+        ctx.font = `${Math.max(7,W*0.009)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText("● PROJECTOR", vx, psY + psH + H*0.018);
+
+        // ── 7. WHITEBOARD (left of screen) ───────────────────────────────────
+        const wbW = W*0.10, wbH = H*0.13;
+        const wbX = psX - wbW - W*0.025, wbY = psY + H*0.005;
+        const wbGrad = ctx.createLinearGradient(wbX,wbY,wbX+wbW,wbY+wbH);
+        wbGrad.addColorStop(0, rgba([205,214,232], 0.55));
+        wbGrad.addColorStop(1, rgba([160,175,205], 0.42));
+        ctx.fillStyle = wbGrad;
+        ctx.fillRect(wbX,wbY,wbW,wbH);
+        ctx.strokeStyle = rgba([120,140,190],0.25);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(wbX,wbY,wbW,wbH);
+        // Board lines
+        ctx.strokeStyle = rgba([80,100,160],0.12);
+        ctx.lineWidth = 0.8;
+        for(let li=1;li<4;li++){
+          const lly = wbY+wbH*(li/4);
+          ctx.beginPath();
+          ctx.moveTo(wbX+wbW*0.06,lly);
+          ctx.lineTo(wbX+wbW*0.92,lly);
+          ctx.stroke();
+        }
+        ctx.fillStyle = rgba([120,140,200],0.12);
+        ctx.font = `${Math.max(5,W*0.007)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText("WHITEBOARD", wbX+wbW*0.5, wbY+wbH+H*0.018);
+
+        // ── 8. TEACHER DESK (front-left corner) ──────────────────────────────
+        const tdW = W*0.11, tdH = H*0.032, tdD = H*0.014;
+        const tdX = W*0.05, tdY = fwBot - H*0.072;
+        const tdColor = lerpColor([80,65,45],[130,105,75],globalIllum*0.5);
+
+        // Chair behind the teacher desk
+        ctx.fillStyle = rgba([34,45,65],0.72);
+        ctx.fillRect(tdX + tdW*0.60, tdY + tdH*0.18, tdW*0.18, tdH*0.58);
+        ctx.fillStyle = rgba([56,72,96],0.76);
+        ctx.fillRect(tdX + tdW*0.62, tdY - tdH*0.12, tdW*0.14, tdH*0.28);
+
+        ctx.fillStyle = rgba(lerpColor(tdColor,lc,globalIllum*0.15),0.9);
+        ctx.beginPath();
+        ctx.moveTo(tdX, tdY);
+        ctx.lineTo(tdX+tdW, tdY);
+        ctx.lineTo(tdX+tdW+tdD, tdY+tdH);
+        ctx.lineTo(tdX-tdD*0.5, tdY+tdH);
+        ctx.fill();
+        ctx.strokeStyle = rgba([255,255,255],0.15);
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(tdX,tdY); ctx.lineTo(tdX+tdW,tdY); ctx.stroke();
+
+        // Desk legs and underside shadow for depth
+        ctx.strokeStyle = rgba([28,22,18],0.55);
+        ctx.lineWidth = Math.max(1, W*0.0015);
+        ctx.beginPath();
+        ctx.moveTo(tdX+tdW*0.08, tdY+tdH);
+        ctx.lineTo(tdX+tdW*0.08, tdY+tdH+H*0.045);
+        ctx.moveTo(tdX+tdW*0.82, tdY+tdH);
+        ctx.lineTo(tdX+tdW*0.82, tdY+tdH+H*0.045);
+        ctx.stroke();
+        ctx.fillStyle = rgba([0,0,0],0.18);
+        ctx.beginPath();
+        ctx.ellipse(tdX+tdW*0.48, tdY+tdH+H*0.008, tdW*0.48, H*0.015, 0, 0, Math.PI*2);
+        ctx.fill();
+
+        // Laptop on teacher desk
+        const lapW=tdW*0.23, lapH=tdH*0.7, lapX=tdX+tdW*0.38, lapY=tdY-lapH+2;
+        ctx.fillStyle = rgba([60,65,80],0.85);
+        ctx.fillRect(lapX,lapY,lapW,lapH);
+        ctx.fillStyle = rgba(m.projHue||[20,30,60], m.projOn>0.5?0.7:0.15);
+        ctx.fillRect(lapX+lapW*0.08,lapY+lapH*0.1,lapW*0.84,lapH*0.65);
+
+        // Papers and a mug to make the desk feel more realistic
+        ctx.fillStyle = rgba([240,244,250],0.88);
+        ctx.beginPath();
+        ctx.moveTo(tdX+tdW*0.16, tdY-tdH*0.20);
+        ctx.lineTo(tdX+tdW*0.38, tdY-tdH*0.20);
+        ctx.lineTo(tdX+tdW*0.35, tdY-tdH*0.02);
+        ctx.lineTo(tdX+tdW*0.14, tdY-tdH*0.02);
+        ctx.fill();
+        ctx.strokeStyle = rgba([180,190,220],0.42);
+        ctx.stroke();
+
+        ctx.fillStyle = rgba([226,232,240],0.78);
+        ctx.beginPath();
+        ctx.arc(tdX+tdW*0.76, tdY-tdH*0.04, H*0.010, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = rgba([180,190,210],0.55);
+        ctx.fillRect(tdX+tdW*0.75, tdY-H*0.01, W*0.006, H*0.012);
+
+        // Teacher name plate from database-backed state
+        if (CUR_TEACHER) {
+          const tagW = tdW*1.20;
+          const tagH = H*0.040;
+          const tagX = tdX + tdW*0.02;
+          const tagY = tdY - tagH - H*0.005;
+          const tagGrad = ctx.createLinearGradient(tagX, tagY, tagX+tagW, tagY+tagH);
+          tagGrad.addColorStop(0, rgba([15,23,42],0.92));
+          tagGrad.addColorStop(1, rgba([30,41,59],0.96));
+          ctx.fillStyle = tagGrad;
+          ctx.strokeStyle = rgba([96,165,250],0.35);
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(tagX, tagY, tagW, tagH, 5);
+          } else {
+            ctx.rect(tagX, tagY, tagW, tagH);
+          }
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = rgba([226,232,240],0.96);
+          ctx.font = `${Math.max(9, W*0.014)}px monospace`;
+          ctx.textAlign = "center";
+          ctx.fillText(CUR_TEACHER, tagX + tagW*0.5, tagY + tagH*0.63);
+          ctx.fillStyle = rgba([96,165,250],0.7);
+          ctx.font = `${Math.max(6, W*0.008)}px monospace`;
+          ctx.fillText("TEACHER DESK", tagX + tagW*0.5, tagY - H*0.004);
+        }
+
+        // ── 9. CEILING LIGHTS (4×) ────────────────────────────────────────────
+        const lightYTop = H*0.035;
+        const numLights = 4;
+        const lightXs   = [W*0.2, W*0.38, W*0.62, W*0.8];
+        const lightLen  = W*0.09, lightH2 = H*0.010;
+
+        for (let i=0; i<numLights; i++) {
+          const baseInten = (m.lights[i]||0) * projectorFactor;
+          const lx = lightXs[i]-lightLen/2;
+          const ly = lightYTop;
+          const cx2 = lx+lightLen/2;
+          if (baseInten > 0.04) {
+            const inten = baseInten*(0.97+0.03*Math.sin(tNow*11+i*2.1));
+            // Bulb housing + glass so the lamp looks like a real fixture
+            ctx.fillStyle = rgba([30,36,52],0.92);
+            ctx.beginPath();
+            ctx.roundRect(lx+lightLen*0.16, ly-H*0.012, lightLen*0.68, lightH2*1.85, 3);
+            ctx.fill();
+            ctx.fillStyle = rgba([245,248,255],0.92*inten);
+            ctx.beginPath();
+            ctx.ellipse(cx2, ly+lightH2*0.45, lightLen*0.18, lightH2*0.95, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowColor = rgb(lc);
+            ctx.shadowBlur  = 22*inten;
+            ctx.fillStyle   = rgba([255,255,255], inten);
+            ctx.fillRect(lx,ly,lightLen,lightH2);
+            ctx.shadowBlur  = 55*inten;
+            ctx.fillStyle   = rgba(lc, inten*0.55);
+            ctx.fillRect(lx-lightLen*0.18, ly, lightLen*1.36, lightH2);
+            ctx.shadowBlur = 0;
+
+            // Lens flare
+            const flG2 = ctx.createRadialGradient(cx2,ly,0,cx2,ly,lightLen*1.4);
+            flG2.addColorStop(0, rgba([255,255,255],inten*0.38));
+            flG2.addColorStop(1, rgba(lc,0));
+            ctx.fillStyle = flG2;
+            ctx.beginPath();
+            ctx.ellipse(cx2,ly+lightH2/2,lightLen*1.1*inten,lightH2*0.75,0,0,Math.PI*2);
+            ctx.fill();
+
+            // Volumetric cone
+            const coneH = H*(0.42+inten*0.48);
+            const coneW = lightLen*(1.55+inten*1.85);
+            ctx.beginPath();
+            ctx.moveTo(cx2-lightLen*0.38,ly+lightH2);
+            ctx.lineTo(cx2+lightLen*0.38,ly+lightH2);
+            ctx.lineTo(cx2+coneW*0.5, ly+lightH2+coneH);
+            ctx.quadraticCurveTo(cx2,ly+lightH2+coneH*1.12,cx2-coneW*0.5,ly+lightH2+coneH);
+            const cg = ctx.createLinearGradient(0,ly,0,ly+coneH);
+            cg.addColorStop(0, rgba(lc,inten*0.45));
+            cg.addColorStop(0.3, rgba(lc,inten*0.16));
+            cg.addColorStop(1, rgba(lc,0));
+            ctx.fillStyle = cg;
+            ctx.fill();
+
+            // Floor bounce
+            const bG = ctx.createRadialGradient(cx2,H*0.82,0,cx2,H*0.82,W*0.14);
+            bG.addColorStop(0, rgba(lc,inten*0.10));
+            bG.addColorStop(1, rgba(lc,0));
+            ctx.fillStyle = bG;
+            ctx.beginPath();
+            ctx.ellipse(cx2,H*0.82,W*0.14,H*0.06,0,0,Math.PI*2);
+            ctx.fill();
+          } else {
+            ctx.fillStyle = rgba([28,32,42],0.55);
+            ctx.fillRect(lx,ly,lightLen,lightH2);
+          }
+        }
+
+        // ── 10. PERSPECTIVE GRID (subtle) ────────────────────────────────────
+        ctx.strokeStyle = rgba([150,170,210],0.015);
+        ctx.lineWidth = 0.4;
+        for(let fi=0;fi<5;fi++){
+          const fy = H*(0.60+fi*0.07);
+          ctx.beginPath(); ctx.moveTo(0,fy); ctx.lineTo(W,fy); ctx.stroke();
+        }
+        for(let fx=0;fx<=10;fx++){
+          const xx=W*(fx/10);
+          ctx.beginPath();
+          ctx.moveTo(vx+(xx-vx)*0.08, vy+(H*0.70-vy)*0.08);
+          ctx.lineTo(xx,H);
+          ctx.stroke();
+        }
+
+        // ── 11. SEATS 50 (back-of-room perspective, painter's order) ────────
+        const sc2 = m.studentColor||[100,150,255];
+        const maxSeats  = 50;
+        const activeCnt = Math.max(0, Math.min(maxSeats, Math.round(m.students)));
+
+        // Calculate per-seat occupation — fill from back (row 4) to front (row 0)
+        // Slot sort order: sorted by y ascending = front first, back last
+        // We label occupancy by slot index in the SORTED array
+        // seats: row 0 (front) = last drawn, row 4 (back) = first drawn
+        // occupancy fills from back rows first (seats are numbered 0..49 sorted by y descending original)
+        const occupiedSet = new Set();
+        // Build slot indices sorted by depth (back first = high z first)
+        const byDepth = SEAT_SLOTS.map((s,i)=>({i,z:s.z})).sort((a,b)=>b.z-a.z);
+        byDepth.slice(0,activeCnt).forEach(({i})=>occupiedSet.add(i));
+
+        for (let si=0; si<SEAT_SLOTS.length; si++) {
+          const s   = SEAT_SLOTS[si];
+          const occupied = occupiedSet.has(si);
+          const scale = 0.23 + s.z * 0.58;
+          const cx3  = W*s.x;
+          const deskY2 = H*s.y;
+          const deskW2 = W*0.030*scale;
+          const deskD2 = H*0.013*scale;
+          const chairY2= deskY2 + H*0.018*scale;
+          const seatW2 = W*0.0155*scale;
+          const seatH2 = H*0.006*scale;
+          const backH2 = H*0.015*scale;
+          const headR2 = W*0.0072*scale;
+
+          // Ground shadow
+          ctx.fillStyle = rgba([0,0,0], occupied?0.14+0.12*s.z:0.07+0.07*s.z);
+          ctx.beginPath();
+          ctx.ellipse(cx3, chairY2+seatH2*3.2, deskW2*0.9, seatH2*1.3,0,0,Math.PI*2);
+          ctx.fill();
+
+          // Desk top
+          const deskBase2 = lerpColor([68,52,32],[112,88,58],s.z);
+          ctx.fillStyle = occupied
+            ? rgba(lerpColor(deskBase2,lc,globalIllum*0.20),0.95)
+            : rgba(lerpColor(deskBase2,[90,90,90],0.38),0.50);
+          ctx.beginPath();
+          ctx.moveTo(cx3-deskW2*0.5, deskY2);
+          ctx.lineTo(cx3+deskW2*0.5, deskY2);
+          ctx.lineTo(cx3+deskW2*0.58, deskY2+deskD2);
+          ctx.lineTo(cx3-deskW2*0.42, deskY2+deskD2);
+          ctx.fill();
+
+          ctx.strokeStyle = rgba([255,255,255], occupied?0.20:0.10);
+          ctx.lineWidth = Math.max(0.4, scale*0.6);
+          ctx.beginPath();
+          ctx.moveTo(cx3-deskW2*0.5,deskY2);
+          ctx.lineTo(cx3+deskW2*0.5,deskY2);
+          ctx.stroke();
+
+          // Chair
+          const chairBase2 = lerpColor([42,56,80],lc,globalIllum*0.10);
+          ctx.fillStyle = occupied
+            ? rgba(chairBase2,0.88)
+            : rgba(lerpColor(chairBase2,[85,85,95],0.45),0.42);
+          ctx.fillRect(cx3-seatW2*0.55, chairY2, seatW2*1.1, seatH2);
+          ctx.fillRect(cx3-seatW2*0.5, chairY2-backH2, seatW2, backH2);
+
+          // Chair legs
+          ctx.strokeStyle = rgba([20,24,34], occupied?0.85:0.42);
+          ctx.lineWidth = Math.max(0.55,scale*0.85);
+          ctx.beginPath();
+          ctx.moveTo(cx3-seatW2*0.46, chairY2+seatH2);
+          ctx.lineTo(cx3-seatW2*0.46, chairY2+seatH2*2.4);
+          ctx.moveTo(cx3+seatW2*0.46, chairY2+seatH2);
+          ctx.lineTo(cx3+seatW2*0.46, chairY2+seatH2*2.4);
+          ctx.stroke();
+
+          // Highlight occupied seat
+          if (occupied) {
+            ctx.strokeStyle = rgba(sc2, 0.35+s.z*0.16);
+            ctx.lineWidth = Math.max(0.5,scale*0.58);
+            ctx.strokeRect(cx3-seatW2*0.52,chairY2-backH2, seatW2*1.04, seatH2+backH2);
+          }
+
+          if (!occupied) continue;
+
+          // Student figure
+          const bob2 = Math.sin(tNow*1.75+si*0.58)*0.52*scale;
+          const bodyX2 = cx3;
+          const bodyY2 = chairY2 - seatH2*0.85;
+          const headX2 = bodyX2;
+          const headY2 = bodyY2 - headR2*1.28 + bob2;
+          const studFill = lerpColor(sc2,lc,globalIllum*0.08); // subtle light tint only
+
+          // Body shadow
+          ctx.fillStyle = rgba([0,0,0],0.18+0.12*s.z);
+          ctx.beginPath();
+          ctx.ellipse(bodyX2,chairY2+seatH2*0.7,headR2*1.3,headR2*0.68,0,0,Math.PI*2);
+          ctx.fill();
+
+          // Body
+          const bGrad = ctx.createLinearGradient(bodyX2,headY2,bodyX2,bodyY2+headR2*2.0);
+          bGrad.addColorStop(0, rgba(studFill,0.94));
+          bGrad.addColorStop(1, rgba([10,10,16],0.88));
+          ctx.fillStyle = bGrad;
+          ctx.beginPath();
+          ctx.ellipse(bodyX2,bodyY2,headR2*1.16,headR2*0.90,0,0,Math.PI*2);
+          ctx.fill();
+
+          // Head
+          const hGrad = ctx.createRadialGradient(
+            headX2-headR2*0.24,headY2-headR2*0.3,headR2*0.07,
+            headX2,headY2,headR2*1.04
+          );
+          hGrad.addColorStop(0, rgba(studFill,0.96));
+          hGrad.addColorStop(0.65, rgba(studFill,0.98));
+          hGrad.addColorStop(1, rgba([16,16,26],1));
+          ctx.shadowBlur  = 0;
+          ctx.fillStyle   = hGrad;
+          ctx.beginPath();
+          ctx.arc(headX2,headY2,headR2,0,Math.PI*2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        // ── 12. WINDOWS (right wall, subtle) ─────────────────────────────────
+        const winX = W*0.88, winY = H*0.12, winW = W*0.08, winH = H*0.24;
+        const skyBright = Math.max(...m.lights)>0.55;
+        const wg = ctx.createLinearGradient(winX,winY,winX+winW,winY+winH);
+        if (skyBright){
+          wg.addColorStop(0,"rgba(175,215,255,0.65)");
+          wg.addColorStop(1,"rgba(100,160,255,0.28)");
+          ctx.shadowColor = "rgba(150,200,255,0.55)";
+          ctx.shadowBlur  = 35;
+        } else {
+          wg.addColorStop(0,"rgba(18,36,85,0.38)");
+          wg.addColorStop(1,"rgba(8,18,40,0.55)");
+        }
+        ctx.fillStyle = wg;
+        ctx.fillRect(winX,winY,winW,winH);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = rgba([200,220,255],skyBright?0.48:0.10);
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(winX,winY,winW,winH);
+        ctx.strokeStyle = rgba([200,220,255],skyBright?0.28:0.05);
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(winX+winW/2,winY); ctx.lineTo(winX+winW/2,winY+winH);
+        ctx.moveTo(winX,winY+winH/2); ctx.lineTo(winX+winW,winY+winH/2);
+        ctx.stroke();
+
+        // ── 13. DUST PARTICLES ───────────────────────────────────────────────
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        for(let p=0;p<12;p++){
+          const px2=(Math.sin(p*12.2+tNow*0.22)*0.5+0.5)*W;
+          const py2=(Math.cos(p*8.8-tNow*0.28)*0.5+0.5)*H;
+          const ps=(Math.sin(p*5.1+tNow)*0.5+0.5)*1.4;
+          ctx.beginPath(); ctx.arc(px2,py2,ps,0,Math.PI*2); ctx.fill();
+        }
+
+        // ── 14. CINEMATIC VIGNETTE ───────────────────────────────────────────
+        const vig = ctx.createRadialGradient(W*0.5,H*0.45,W*0.18,W*0.5,H*0.5,W*0.92);
+        vig.addColorStop(0,"rgba(0,0,0,0)");
+        vig.addColorStop(0.58,"rgba(2,4,10,0.28)");
+        vig.addColorStop(1,"rgba(0,2,8,0.78)");
+        ctx.fillStyle = vig;
+        ctx.fillRect(0,0,W,H);
+      }
+
+      /* ═══════════════════════════════════════════════
+         ANIMATION BLEND ENGINE
+      ═══════════════════════════════════════════════ */
+      function blendModeColors(m, overrideStudents){
+        return {
+          ambientTop:hex2rgb(m.ambientTop||"#0c1a3d"),
+          ambientBot:hex2rgb(m.ambientBot||"#081025"),
+          wallColor: hex2rgb(m.wallColor ||"#0f1e42"),
+          floorColor:hex2rgb(m.floorColor||"#0a1228"),
+          ceilColor: hex2rgb(m.ceilColor ||"#080e1e"),
+          lights:[...m.lights],
+          lightColor:[...m.lightColor],
+          projOn: m.projOn?1:0,
+          projHue:[...m.projHue],
+          students: overrideStudents !== undefined ? overrideStudents : m.students,
+          studentColor:[...m.studentColor],
+        };
+      }
+
+      let anim = blendModeColors(MODES["__CUR_MODE__"], INIT_PEOPLE);
+      let animTarget={...anim}, animPrev={...anim}, t=1;
+
+      function tick(){
+        requestAnimationFrame(tick);
+        if(t<1){
+          t = Math.min(1,t+0.038);
+          const s = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+          anim.ambientTop  = lerpColor(animPrev.ambientTop, animTarget.ambientTop, s);
+          anim.ambientBot  = lerpColor(animPrev.ambientBot, animTarget.ambientBot, s);
+          anim.wallColor   = lerpColor(animPrev.wallColor,  animTarget.wallColor,  s);
+          anim.floorColor  = lerpColor(animPrev.floorColor, animTarget.floorColor, s);
+          anim.ceilColor   = lerpColor(animPrev.ceilColor,  animTarget.ceilColor,  s);
+          anim.lightColor  = lerpColor(animPrev.lightColor, animTarget.lightColor, s);
+          anim.projHue     = lerpColor(animPrev.projHue,    animTarget.projHue,    s);
+          anim.studentColor= lerpColor(animPrev.studentColor,animTarget.studentColor,s);
+          for(let i=0;i<4;i++)
+            anim.lights[i]=lerp(animPrev.lights[i],animTarget.lights[i],s);
+          anim.projOn  = lerp(animPrev.projOn,  animTarget.projOn,  s);
+          anim.students= lerp(animPrev.students,animTarget.students,s);
+          draw();
+        } else {
+          draw(); // always redraw for micro-animations
+        }
+      }
+
+      /* ═══════════════════════════════════════════════
+         SET MODE — called by Streamlit via template
+      ═══════════════════════════════════════════════ */
+      function setMode(modeKey, overridePeople, overrideBrightness){
+        const m = MODES[modeKey];
+        if(!m) return;
+
+        // Auto brightness from people count
+        const people = overridePeople !== undefined ? overridePeople : m.students;
+        const brightPct = (overrideBrightness !== undefined && overrideBrightness !== null)
+          ? overrideBrightness
+          : autoBrightnessLevel(people);
+
+        document.getElementById("mode-name").textContent = m.name;
+        document.getElementById("mode-name").style.color = m.accent;
+        document.getElementById("mode-sub").textContent  = m.sub;
+
+        // Stats
+        document.getElementById("st-lux").textContent    = m.lux;
+        document.getElementById("st-lux").style.color    = m.accent;
+        document.getElementById("st-people").textContent = people;
+        document.getElementById("st-people").style.color = m.accent;
+        document.getElementById("st-bright").textContent = brightPct+"%";
+        document.getElementById("st-bright").style.color = m.accent;
+        document.getElementById("st-proj").textContent   = m.projOn?"ON":"OFF";
+        document.getElementById("st-proj").style.color   = m.projOn?"#4ade80":"#f87171";
+        document.getElementById("st-save").textContent   = m.saving+"%";
+        document.getElementById("st-save").style.color   = m.accent;
+
+        // Auto brightness badge
+        document.getElementById("bright-val").textContent  = brightPct+"%";
+        document.getElementById("bright-bar").style.width  = brightPct+"%";
+        // Badge bar color changes with intensity
+        const barColor = brightPct >= 80 ? "#22c55e"
+                       : brightPct >= 50 ? "#3b82f6"
+                       : brightPct >= 30 ? "#f59e0b"
+                       : "#ef4444";
+        document.getElementById("bright-bar").style.background = barColor;
+
+        // Capacity bar
+        const capPct = Math.round((people/50)*100);
+        document.getElementById("cap-bar-fill").style.height = capPct+"%";
+
+        // Scale light intensity by auto brightness factor
+        const brightFactor = brightPct/100;
+        const scaledLights = m.lights.map(l => l * brightFactor);
+
+        animPrev = {...anim, lights:[...anim.lights]};
+        animTarget = blendModeColors(m, people);  /* ← ส่ง people ตรงๆ ไม่ดึงจาก MODES */
+        animTarget.lights = scaledLights;
+        animTarget.students = people;
+        t = 0;
+      }
+
+      /* Initial load — snap ทันทีไม่ต้อง blend (เพราะ anim เริ่มจาก __CUR_MODE__ แล้ว) */
+      setMode("__CUR_MODE__", INIT_PEOPLE, INIT_BRIGHT);
+      t = 1; // snap to target immediately — no blend-from-LECTURE_MODE flicker
+      window.addEventListener("resize", resize);
+      resize();
+      tick();
+    </script>
+  </body>
+</html>

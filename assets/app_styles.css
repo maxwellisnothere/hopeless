@@ -1,0 +1,304 @@
+/* ============================= */
+/* ===== THEME SYSTEM ===== */
+/* ============================= */
+html[data-theme="light"] {
+--bg-main: #f8fafc;
+--bg-card: #ffffff;
+--border: #e5e7eb;
+--text-main: #0f172a;
+--text-sub: #64748b;
+--accent: #3b82f6;
+}
+
+html[data-theme="dark"] {
+--bg-main: #0d1117;
+--bg-card: #0d1f2d;
+--border: #1e3a52;
+--text-main: #e6edf3;
+--text-sub: #94a3b8;
+--accent: #3b82f6;
+}
+
+/* ============================= */
+/* ===== GLOBAL ===== */
+/* ============================= */
+html[data-theme="light"] [data-testid="stAppViewContainer"] {
+background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+color: var(--text-main);
+}
+
+html[data-theme="dark"] [data-testid="stAppViewContainer"] {
+background: radial-gradient(circle at top, #0f172a, #020617);
+color: var(--text-main);
+}
+
+/* ❌ ลบตัวนี้ออก (สำคัญมาก) */
+/*
+[data-testid="stAppViewContainer"] {
+background: #0d1117;
+}
+*/
+
+section.main > div {
+padding-top: 1rem;
+}
+
+/* ============================= */
+/* ===== KPI CARD ===== */
+/* ============================= */
+.kpi-card {
+background: var(--bg-card);
+border-radius: 12px;
+padding: 14px 10px;
+text-align: center;
+border: 1px solid var(--border);
+color: var(--text-main);
+
+height: 120px;
+display: flex;
+flex-direction: column;
+justify-content: space-between;
+
+}
+
+.kpi-val {
+font-size: 1.7rem;
+font-weight: 800;
+}
+
+.kpi-lbl {
+font-size: 0.72rem;
+color: var(--text-sub);
+margin-top: 3px;
+text-transform: uppercase;
+letter-spacing: .5px;
+}
+
+/* ============================= */
+/* ===== COLORS ===== */
+/* ============================= */
+.green { color: #00e676; }
+.red { color: #f87171; }
+.yellow { color: #ffd600; }
+.cyan { color: #38bdf8; }
+
+/* ============================= */
+/* ===== ROLES ===== */
+/* ============================= */
+.role-admin {
+background: #0d2b0d;
+border: 1px solid #00e676;
+border-radius: 8px;
+padding: 5px 14px;
+font-size: .85rem;
+display: inline-block;
+}
+
+.role-teacher {
+background: #1a1130;
+border: 1px solid #a78bfa;
+border-radius: 8px;
+padding: 5px 14px;
+font-size: .85rem;
+display: inline-block;
+}
+
+/* ============================= */
+/* ===== CHIP ===== */
+/* ============================= */
+.chip {
+background: var(--bg-card);
+border: 1px solid var(--border);
+border-radius: 20px;
+padding: 3px 11px;
+font-size: .8rem;
+color: var(--accent);
+display: inline-block;
+margin: 2px;
+}
+
+/* ============================= */
+/* ===== PROJECTOR ===== */
+/* ============================= */
+.proj-on {
+background: #0d2b0d;
+border: 1px solid #00e676;
+border-radius: 8px;
+padding: 6px 14px;
+color: #00e676;
+font-weight: 700;
+font-size: .9rem;
+}
+
+.proj-off {
+background: #2b0d0d;
+border: 1px solid #f87171;
+border-radius: 8px;
+padding: 6px 14px;
+color: #f87171;
+font-weight: 700;
+font-size: .9rem;
+}
+
+/* ============================= */
+/* ===== STREAMLIT METRIC ===== */
+/* ============================= */
+div[data-testid="stMetricValue"] {
+font-size: 1.3rem !important;
+color: var(--text-main);
+}
+
+/* ============================= */
+/* ===== STEP TITLE BIGGER ===== */
+/* ============================= */
+
+/* Step 1 / 2 / 3 */
+h3 {
+  font-size: 1.8rem !important;
+  font-weight: 800;
+  padding: 8px 12px;
+  border-left: 4px solid #3b82f6;
+  background: rgba(59,130,246,0.08);
+  border-radius: 6px;
+}
+
+/* ข้อความ label ใต้ step */
+label, .stSelectbox label {
+  font-size: 1.05rem !important;
+  font-weight: 600;
+}
+
+/* dropdown text */
+.stSelectbox div[data-baseweb="select"] {
+  font-size: 1rem;
+}
+
+/* ❌ ปิดการพิมพ์ใน selectbox */
+div[data-baseweb="select"] input {
+  pointer-events: none;
+  caret-color: transparent;
+}
+
+/* ========================= */
+/* ===== DASHBOARD UI ===== */
+/* ========================= */
+
+.kpi-card {
+  background: linear-gradient(145deg, #0f172a, #111827);
+  border-radius: 18px;
+  padding: 18px 16px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+  transition: all 0.25s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+}
+
+/* ตัวเลขใหญ่ */
+.kpi-val {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-top: 8px;
+}
+
+/* label */
+.kpi-label {
+  font-size: 1rem;
+  color: #9ca3af;
+}
+
+/* สีแต่ละประเภท */
+.kpi-green { color: #22c55e; }
+.kpi-yellow { color: #facc15; }
+.kpi-red { color: #ef4444; }
+.kpi-blue { color: #3b82f6; }
+
+/* header bar */
+.dashboard-header {
+  font-size: 1.6rem;
+  font-weight: 800;
+  padding: 10px 14px;
+  border-left: 5px solid #3b82f6;
+  background: rgba(59,130,246,0.08);
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+
+.kpi-card {
+  margin-bottom: 10px;
+}
+
+.kpi-label {
+    font-size: 0.75rem;
+    color: var(--text-sub);
+}
+
+.kpi-val {
+    font-size: 1.7rem;
+    font-weight: 800;
+    min-height: 40px;
+}
+
+.kpi-sub {
+    font-size: 0.7rem;
+    color: var(--text-sub);
+    min-height: 18px;
+}
+/* ============================= */
+/* ===== MODERN BUTTON ===== */
+/* ============================= */
+
+.stButton > button {
+    width: 100%;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: 1px solid rgba(59,130,246,0.3);
+
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    color: #e6edf3;
+
+    transition: all 0.25s ease;
+}
+
+/* 🔥 Hover */
+.stButton > button:hover {
+    transform: translateY(-2px);
+    border-color: #3b82f6;
+    box-shadow: 0 8px 25px rgba(59,130,246,0.25);
+    background: linear-gradient(135deg, #1e293b, #334155);
+}
+
+/* 🔥 Active (ตอนกด) */
+.stButton > button:active {
+    transform: scale(0.97);
+}
+
+/* 🔥 ปุ่มหลัก (เช่น Random / Apply) */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    border: none;
+    color: white;
+}
+
+.stButton > button[kind="primary"]:hover {
+    box-shadow: 0 10px 30px rgba(6,182,212,0.4);
+}
+
+/* ===== ACTIVE BUTTON ===== */
+.active-btn {
+    background: linear-gradient(135deg, #3b82f6, #06b6d4) !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 0 20px rgba(59,130,246,0.5);
+}
+
+/* hover ของ active */
+.active-btn:hover {
+    box-shadow: 0 0 30px rgba(6,182,212,0.7);
+}
