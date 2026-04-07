@@ -202,10 +202,19 @@ def get_courses(teacher_name=None):
     return [tuple(r.values()) for r in rows]
 
 # 🎯 [FIX] เพิ่ม get_course_by_id กลับมาให้ UI_RESULT
+# เพิ่มโค้ดส่วนนี้ลงในไฟล์ database_pg.py
 @_cache_data(ttl_sec=20)
 def get_course_by_id(course_id):
+    """ค้นหาวิชาด้วย ID (Integer)"""
     if not course_id: return None
     rows = _fetch("SELECT id,teacher_name,course_code,course_name,hours_per_week,default_projector FROM courses WHERE id=%s", (course_id,))
+    return tuple(rows[0].values()) if rows else None
+
+@_cache_data(ttl_sec=20)
+def get_course_by_code(course_code):
+    """ค้นหาวิชาด้วย Course Code (String) สำหรับกรณี ID จากตารางอื่น"""
+    if not course_code: return None
+    rows = _fetch("SELECT id,teacher_name,course_code,course_name,hours_per_week,default_projector FROM courses WHERE course_code=%s", (course_code,))
     return tuple(rows[0].values()) if rows else None
 
 def save_course(teacher_name, code, name, hours, default_proj):

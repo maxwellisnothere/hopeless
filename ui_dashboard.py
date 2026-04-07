@@ -126,3 +126,5 @@ def render_dashboard():
                 <div class="kpi-sub">TOTAL ACTIVATIONS</div>
             </div>
         """, unsafe_allow_html=True)
+
+        

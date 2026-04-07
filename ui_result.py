@@ -63,14 +63,21 @@ def render_result(is_admin: bool, actor: Optional[str], actor_role: str, chosen,
     m1.metric("Hour", f"{sc['hour']:02d}:00")
     m2.metric("Proj", "ON " if new_proj else "OFF ")
 
-    # Course chip
     if course_id:
-        cd = get_course_by_id(course_id)
+        # 1. ตรวจสอบก่อนว่าเป็นตัวเลขหรือไม่ เพื่อป้องกัน psycopg2 Error
+        if str(course_id).isdigit():
+            cd = get_course_by_id(int(course_id))
+        else:
+            # 2. ถ้าไม่ใช่ตัวเลข (เช่น "mw77sg635") ให้ลองหาด้วย Course Code แทน
+            # *ต้องไปเพิ่มฟังก์ชัน get_course_by_code ใน database_pg.py ด้วยนะคะ
+            from database_pg import get_course_by_code
+            cd = get_course_by_code(str(course_id))
+
         if cd:
             st.markdown(
                 f'<div class="chip">{cd[2]} — {cd[3]}</div>'
                 f'<div class="chip">{cd[4]}h/wk</div>',
-                unsafe_allow_html=True,
+                unsafe_allow_html=True
             )
 
     if t_name:

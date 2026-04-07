@@ -303,3 +303,32 @@ def clear_all_logs():
     conn.execute("DELETE FROM energy_logs")
     conn.execute("DELETE FROM activity_log")
     conn.commit(); conn.close()
+
+def get_monthly_impact_stats():
+    """ดึงข้อมูลสรุปรายเดือนสำหรับ SQLite โดยใช้ strftime"""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # เพื่อให้ดึงข้อมูลเป็นแบบ Dictionary ได้
+    c = conn.cursor()
+    
+    # ใช้ strftime('%Y-%m', timestamp) แทน date_trunc
+    sql = """
+        SELECT 
+            strftime('%Y-%m', timestamp) as month,
+            SUM(energy_baseline) / 1000.0 as baseline_kwh,
+            SUM(energy_ai) / 1000.0 as optimized_kwh,
+            SUM(energy_saved_w) / 1000.0 as saved_kwh,
+            SUM(cost_baseline - cost_ai) as saved_money_thb
+        FROM energy_logs
+        GROUP BY month 
+        ORDER BY month
+    """
+    c.execute(sql)
+    rows = [dict(row) for row in c.fetchall()]
+    conn.close()
+
+    # คำนวณ Carbon และต้นไม้
+    for r in rows:
+        r['carbon_reduction'] = round(float(r['saved_kwh']) * 0.4999, 2)
+        r['trees_equivalent'] = round(r['carbon_reduction'] / 25.2, 2)
+    return rows
