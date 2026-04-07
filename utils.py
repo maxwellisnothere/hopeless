@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 from functools import lru_cache
 from config import BASELINE_W, PROJ_BONUS, MODE_RATIO
+from typing import Union, Optional, Tuple # - เพิ่มเพื่อรองรับ Python 3.9
 
 BASE_DIR = Path(__file__).parent
 
@@ -11,8 +12,8 @@ def load_app_styles() -> str:
     style_path = BASE_DIR / "assets" / "app_styles.css"
     return style_path.read_text(encoding="utf-8")
 
-
-def calc_energy(mode: str, proj: bool, brightness_pct: int | float | None = None) -> tuple[int, int]:
+# - แก้ไขบรรทัดนี้ให้รองรับ Python 3.9
+def calc_energy(mode: str, proj: bool, brightness_pct: Optional[Union[int, float]] = None) -> Tuple[int, int]:
     base = BASELINE_W * MODE_RATIO.get(mode, .90)
     if brightness_pct is not None:
         base *= max(0.1, min(1.0, float(brightness_pct) / 100.0))

@@ -3,7 +3,7 @@ import time
 import streamlit as st
 from ai_logic import SCENARIOS
 from database_pg import get_teacher_profiles, get_courses, log_activity
-
+from typing import Optional # - เพิ่มเพื่อรองรับ Python 3.9
 
 MANUAL_MODE_OPTIONS = [
     "LECTURE_MODE",
@@ -33,7 +33,7 @@ MANUAL_MODE_DESC = {
 }
 
 
-def render_control_panel(is_admin: bool, actor: str | None, actor_role: str):
+def render_control_panel(is_admin: bool, actor: Optional[str], actor_role: str): # - แก้ไข Type Hint ให้รองรับ Python 3.9
     
     if "selected_mode_btn" not in st.session_state:
         st.session_state["selected_mode_btn"] = None

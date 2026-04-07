@@ -1,50 +1,27 @@
 """
 ui_courses.py — หน้าตารางเรียน (Course Grid)
-แสดง card รายวิชาทั้งหมด → กดเข้าหน้า Control ทันที
+ดึงข้อมูลจาก master_schedule (Real-time Sync) พร้อมระบบจำลองเวลา (Simulation Filter)
 """
 import streamlit as st
-from database_pg import get_courses, get_teacher_profiles
+from database_pg import get_master_schedule, get_teacher_profiles
+from typing import Optional, List
 
 # ── สีและไอคอนประจำโหมดวิชา ──────────────────────────────────
 PROJ_COLOR = {True: "#8B5CF6", False: "#3B82F6"}
 PROJ_LABEL = {True: "🎥 ใช้โปรเจกเตอร์", False: "📋 ไม่มีโปรเจกเตอร์"}
 
-# ── ตาราง: วัน/เวลา (สร้างจาก course_id seed เพื่อให้ดูสมจริง) ──
-_DAY_SLOTS = [
-    ("จันทร์",   "08:00–10:00"),
-    ("อังคาร",   "10:00–12:00"),
-    ("พุธ",      "13:00–15:00"),
-    ("พฤหัส",   "09:00–11:00"),
-    ("ศุกร์",    "14:00–16:00"),
-    ("จันทร์",   "13:00–15:00"),
-    ("อังคาร",   "08:00–10:00"),
-]
-
-
-def _day_slot(course_id: int) -> tuple[str, str]:
-    idx = (course_id - 1) % len(_DAY_SLOTS)
-    return _DAY_SLOTS[idx]
-
-
-def _teacher_note(teacher_name: str, profiles: list) -> str:
+def _teacher_note(teacher_name: str, profiles: List) -> str:
     for p in profiles:
         if p[0] == teacher_name:
             return p[3] or ""
     return ""
 
-
 # ══════════════════════════════════════════════════════════════
 #  MAIN RENDER
 # ══════════════════════════════════════════════════════════════
 
-def render_course_grid(is_admin: bool, actor: str | None):
-    """
-    แสดงหน้าตารางเรียนแบบ card grid
-    - is_admin=True  → เห็นทุกวิชา แบ่งกลุ่มตามอาจารย์
-    - is_admin=False → เห็นเฉพาะวิชาของ actor
-    """
-
-    # ── CSS เพิ่มเติมสำหรับ card ─────────────────────────────
+def render_course_grid(is_admin: bool, actor: Optional[str]):
+    # ── CSS สำหรับ card ─────────────────────────────
     st.markdown("""
     <style>
     .course-card {
@@ -54,7 +31,7 @@ def render_course_grid(is_admin: bool, actor: str | None):
         padding: 20px 18px 16px;
         margin-bottom: 4px;
         transition: border-color .2s;
-        min-height: 210px;
+        min-height: 220px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -80,81 +57,108 @@ def render_course_grid(is_admin: bool, actor: str | None):
     .cc-proj-on  { background:#8B5CF622; color:#A78BFA; border:1px solid #8B5CF644; }
     .cc-proj-off { background:#3B82F622; color:#60A5FA; border:1px solid #3B82F644; }
     .cc-day      { background:#10B98122; color:#34D399; border:1px solid #10B98144; }
-    .cc-h        { background:#F59E0B22; color:#FCD34D; border:1px solid #F59E0B44; }
     .cc-note     { font-size:.72rem; color:#64748b; margin-top:8px; font-style:italic; }
-
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Header ───────────────────────────────────────────────
-    st.markdown("## 📚 ตารางเรียน")
-    if is_admin:
-        st.caption("แสดงรายวิชาทั้งหมดในระบบ — กดการ์ดเพื่อเข้าควบคุมแสงห้องนั้น")
-    else:
-        st.caption(f"รายวิชาของ **{actor}** — กดการ์ดเพื่อเข้าควบคุมแสง")
+    st.markdown("## 📚 ตารางเรียน (Master Schedule)")
+    
+    # ── 🕒 ตัวกรองเวลา (Simulation Filter) ──
+    use_sim = st.toggle("🕒 เปิดโหมดจำลองเวลา (แสดงเฉพาะวิชาที่กำลังสอนในเวลานี้)")
+    
+    sim_day = None
+    sim_time = None
+    
+    if use_sim:
+        with st.container(border=True):
+            st.markdown("**เลือกวันและเวลาที่ต้องการจำลอง:**")
+            col1, col2 = st.columns(2)
+            # ตัวเลือกตามรูปแบบที่เก็บในฐานข้อมูล
+            days_options = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+            time_options = [f"{str(h).zfill(2)}:00" for h in range(8, 18)]
+            
+            sim_day = col1.selectbox("วัน (Day)", days_options)
+            sim_time = col2.selectbox("เวลา (Time)", time_options)
 
     st.divider()
 
-    # ── โหลดข้อมูล ────────────────────────────────────────────
+    if is_admin:
+        st.caption("แสดงตารางสอนในระบบที่ซิงค์จากฐานข้อมูลกลาง")
+    else:
+        st.caption(f"ตารางสอนของ **{actor}**")
+
     profiles = get_teacher_profiles()
 
     if is_admin:
-        # จัดกลุ่มตามอาจารย์
-        all_courses = get_courses(None)   # (id, teacher, code, name, h, proj)
-        teachers = sorted(set(r[1] for r in all_courses))
+        all_schedules = get_master_schedule(None)
+        if not all_schedules:
+            st.info("ไม่พบข้อมูลในตาราง master_schedule")
+            return
+            
+        # 💡 กรองข้อมูลตามเวลาที่เลือก (ถ้าเปิดโหมดจำลอง)
+        if use_sim:
+            all_schedules = [s for s in all_schedules if s[1] == sim_day and s[2] == sim_time]
+            if not all_schedules:
+                st.warning(f"ไม่มีการเรียนการสอนในวัน {sim_day} เวลา {sim_time} น.")
+                return
+
+        # กรองเอาเฉพาะชื่ออาจารย์ที่ไม่เป็นค่าว่าง
+        teachers = sorted(set(r[6] for r in all_schedules if r[6]))
+        
+        # จัดการข้อมูลที่ไม่มีชื่ออาจารย์ (Fallback)
+        no_teacher_schedules = [r for r in all_schedules if not r[6]]
+        if no_teacher_schedules:
+            with st.expander(f"🏢 ไม่ระบุอาจารย์ ({len(no_teacher_schedules)} คาบ)", expanded=True):
+                _render_cards(no_teacher_schedules, profiles)
 
         for teacher in teachers:
-            t_courses = [r for r in all_courses if r[1] == teacher]
-            note = _teacher_note(teacher, profiles)
-
-            with st.expander(f"👨‍🏫 {teacher}  ({len(t_courses)} วิชา)", expanded=True):
-                _render_cards(t_courses, teacher, profiles, is_admin, actor, admin_view=True)
+            t_schedules = [r for r in all_schedules if r[6] == teacher]
+            with st.expander(f"👨‍🏫 {teacher} ({len(t_schedules)} คาบ)", expanded=True):
+                _render_cards(t_schedules, profiles)
     else:
-        # Teacher: เห็นเฉพาะวิชาตัวเอง
-        my_courses = get_courses(actor)   # (id, code, name, h, proj)
-        if not my_courses:
-            st.info("ยังไม่มีวิชา — ให้ Admin เพิ่มวิชาให้ก่อน")
+        my_schedules = get_master_schedule(actor)
+        if not my_schedules:
+            st.info("ไม่พบตารางสอนของคุณในระบบ")
             return
-        # แปลงให้มี teacher field ด้วย
-        expanded = [(r[0], actor, r[1], r[2], r[3], r[4]) for r in my_courses]
-        _render_cards(expanded, actor, profiles, is_admin, actor, admin_view=False)
+            
+        # 💡 กรองข้อมูลตามเวลาที่เลือก (ถ้าเปิดโหมดจำลอง)
+        if use_sim:
+            my_schedules = [s for s in my_schedules if s[1] == sim_day and s[2] == sim_time]
+            if not my_schedules:
+                st.warning(f"คุณไม่มีการสอนในวัน {sim_day} เวลา {sim_time} น.")
+                return
+                
+        _render_cards(my_schedules, profiles)
 
-
-
-
-# ══════════════════════════════════════════════════════════════
-#  CARD GRID
-# ══════════════════════════════════════════════════════════════
-
-def _render_cards(courses, teacher, profiles, is_admin, actor, admin_view=False):
-    """Render N cards in 3-column grid."""
-    if not courses:
-        st.caption("ไม่มีวิชา")
-        return
-
+def _render_cards(schedules: List, profiles: List):
+    """Render cards based on master_schedule data structure."""
     cols_per_row = 3
-    rows = [courses[i:i+cols_per_row] for i in range(0, len(courses), cols_per_row)]
-
-    for row in rows:
+    for i in range(0, len(schedules), cols_per_row):
+        row = schedules[i:i+cols_per_row]
         cols = st.columns(cols_per_row, gap="medium")
-        for col, course in zip(cols, row):
-            # course = (id, teacher, code, name, h, proj)
-            cid, cteacher, ccode, cname, chours, cproj = course
-            day, slot = _day_slot(cid)
-            proj_cls   = "cc-proj-on" if cproj else "cc-proj-off"
-            proj_lbl   = "🎥 โปรเจกเตอร์" if cproj else "📋 ไม่มีโปรเจกเตอร์"
-            note = _teacher_note(cteacher, profiles)
+        for col, item in zip(cols, row):
+            # โครงสร้างจาก database_pg.py: (id, day, start_time, end_time, code, name, teacher, proj)
+            sid, sday, stime, _end_time, scode, sname, steacher, sproj = item
+            
+            # ป้องกันค่าที่เป็น None
+            scode = scode or "N/A"
+            sname = sname or "Unknown Course"
+            steacher = steacher or "ไม่ระบุ"
+            sproj = bool(sproj) if sproj is not None else True
+            
+            proj_cls = "cc-proj-on" if sproj else "cc-proj-off"
+            proj_lbl = "🎥 โปรเจกเตอร์" if sproj else "📋 ไม่มีโปรเจกเตอร์"
+            note = _teacher_note(steacher, profiles)
 
             with col:
                 st.markdown(f"""
                 <div class="course-card">
                   <div>
-                    <div class="cc-code">{ccode}</div>
-                    <div class="cc-name">{cname}</div>
-                    <div class="cc-teacher">👨‍🏫 {cteacher}</div>
+                    <div class="cc-code">{scode}</div>
+                    <div class="cc-name">{sname}</div>
+                    <div class="cc-teacher">👨‍🏫 {steacher}</div>
                     <div>
-                      <span class="cc-badge cc-day">📅 {day} {slot}</span>
-                      <span class="cc-badge cc-h">⏱ {chours}h/wk</span>
+                      <span class="cc-badge cc-day">📅 {sday} @ {stime} น.</span>
                     </div>
                     <div>
                       <span class="cc-badge {proj_cls}">{proj_lbl}</span>
@@ -164,19 +168,14 @@ def _render_cards(courses, teacher, profiles, is_admin, actor, admin_view=False)
                 </div>
                 """, unsafe_allow_html=True)
 
-                if st.button(
-                    "เข้าควบคุมแสง →",
-                    key=f"enter_course_{cid}",
-                    use_container_width=True,
-                ):
-                    # 🔥 เข้าหน้าหลักทันที ไม่มี modal
-                    st.session_state["active_course_id"] = cid
-                    st.session_state["active_teacher"]   = cteacher
-                    st.session_state["_proj_pending"]    = bool(cproj)
+                if st.button("เริ่มการสอน →", key=f"launch_sc_{sid}", use_container_width=True):
+                    # เก็บสถานะการสอนที่เลือก
+                    st.session_state["active_course_id"] = sid
+                    st.session_state["active_teacher"] = steacher
+                    st.session_state["_proj_pending"] = sproj
                     st.session_state["launch_course"] = {
-                        "id": cid, "teacher": cteacher, "code": ccode,
-                        "name": cname, "hours": chours, "proj": bool(cproj),
+                        "id": sid, "teacher": steacher, "code": scode,
+                        "name": sname, "day": sday, "time": stime, "proj": sproj,
                     }
                     st.session_state["page"] = "main"
                     st.rerun()
-

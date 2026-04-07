@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-
+from typing import Union, Optional, Tuple # - สำหรับ Python 3.9
+from supabase_sync import sync_to_digital_twin #
 from config import init_session_state
 from utils import load_app_styles
 from ai_logic import recommend_mode, get_full_ai_state, auto_brightness_level
@@ -19,7 +20,7 @@ from ui_courses import render_course_grid
 # ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Smart Classroom Lighting",
-    page_icon="",
+    page_icon="💡",
     layout="wide",
 )
 
@@ -90,7 +91,6 @@ if "launch_course" in st.session_state:
     lc = st.session_state.pop("launch_course")
     st.session_state["active_course_id"] = lc["id"]
     st.session_state["_proj_pending"]    = lc["proj"]
-    # pre-fill sliders ถ้าทำได้
     if "m_proj_state" not in st.session_state:
         st.session_state["m_proj_state"] = lc["proj"]
 
@@ -108,14 +108,13 @@ if hasattr(st, "fragment"):
     @st.fragment(run_every="3s")
     def _dashboard_live_fragment():
         render_dashboard()
-
     _dashboard_live_fragment()
 else:
     render_dashboard()
 st.divider()
 
 # ═════════════════════════════════════════════
-# 🔥 pre-sync mode จาก chosen_override ก่อน render scene
+# 🔥 pre-sync mode จาก chosen_override
 # ═════════════════════════════════════════════
 if "chosen_override" in st.session_state:
     _pre = st.session_state["chosen_override"]
@@ -140,21 +139,15 @@ col_ctrl, col_result = st.columns([2, 1], gap="large")
 with col_ctrl:
     chosen = render_control_panel(IS_ADMIN, ACTOR, ACTOR_ROLE)
 
-# ── UPDATE AI
-# Don't process if only teacher/course selection changed
+# ── UPDATE AI & Sync to Digital Twin
 if st.session_state.get("selection_changed") and not chosen:
     st.session_state["selection_changed"] = False
-    if "last_sc" in st.session_state:
-        del st.session_state["last_sc"]
-    if "last_mode" in st.session_state:
-        del st.session_state["last_mode"]
-    if "last_ai_state" in st.session_state:
-        del st.session_state["last_ai_state"]
+    for key in ["last_sc", "last_mode", "last_ai_state"]:
+        if key in st.session_state: del st.session_state[key]
 
 if chosen or st.session_state.get("last_sc"):
     sc = chosen if chosen else st.session_state.get("last_sc", {})
 
-    # If user toggles projector from the 3D scene, sync that override into live state.
     if not chosen and sc:
         sc = {**sc, "projector": bool(new_proj)}
 
@@ -185,21 +178,25 @@ if chosen or st.session_state.get("last_sc"):
     st.session_state["last_mode"] = mode
     st.session_state["last_sc"]   = sc
     st.session_state["last_ai_state"] = ai_state
-
     st.session_state["proj_override"][ai_state["mode"]] = bool(sc["projector"])
+
+    # 📡 [SYNC] ส่งข้อมูลไปยัง Supabase เพื่ออัปเดต React Digital Twin
+    if chosen:
+        with st.spinner("กำลังเชื่อมต่อ Digital Twin..."):
+            success = sync_to_digital_twin(ai_state, ACTOR)
+            if success:
+                st.toast(f"📡 ซิงค์ข้อมูล Digital Twin สำเร็จ! (Mode: {ai_state['mode']})", icon="✅")
+            else:
+                st.toast("⚠️ ไม่สามารถซิงค์ข้อมูล Digital Twin ได้", icon="❌")
 
 with col_result:
     render_result(IS_ADMIN, ACTOR, ACTOR_ROLE, chosen, new_proj)
 
 # ═════════════════════════════════════════════
-# DATABASE
+# DATABASE & ADMIN
 # ═════════════════════════════════════════════
 st.divider()
 render_database_tabs(IS_ADMIN, ACTOR, ACTOR_ROLE)
-
-# ═════════════════════════════════════════════
-# ADMIN
-# ═════════════════════════════════════════════
 st.divider()
 
 if IS_ADMIN:
@@ -209,22 +206,16 @@ if IS_ADMIN:
         st.rerun()
 
 # ═════════════════════════════════════════════
-# TEST
+# TEST RESULTS
 # ═════════════════════════════════════════════
 if IS_ADMIN and "test_results" in st.session_state:
-
     st.subheader("Test Results")
-
     acc = st.session_state["test_accuracy"]
     sav = st.session_state["test_saving"]
-
     ta, tb = st.columns(2)
-
     ta.metric("Accuracy", f"{acc:.1f}%")
     tb.metric("Saving", f"{sav:.1f}%")
-
     dt = pd.DataFrame(st.session_state["test_results"])
-
     st.dataframe(dt, use_container_width=True)
 
-st.caption("Smart Classroom Lighting System")
+st.caption("Smart Classroom Lighting System | Connected to PHAM Digital Twin")

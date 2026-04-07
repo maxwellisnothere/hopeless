@@ -10,11 +10,11 @@ Functions:
 """
 
 from __future__ import annotations
+from typing import Union, Optional, List, Dict, Tuple # - เพิ่มเพื่อรองรับ Python 3.9
 
 
 # ══════════════════════════════════════════════════════════
-#  SCENARIOS  (ใช้ใน ui_control.py → Step 3)
-#  แต่ละ scenario มี people จริง ระบุได้เลย ไม่ต้องมี sensor
+#  SCENARIOS
 # ══════════════════════════════════════════════════════════
 
 SCENARIOS = [
@@ -74,44 +74,26 @@ SCENARIOS = [
 # ══════════════════════════════════════════════════════════
 
 MAX_PEOPLE   = 50
-MIN_BRIGHT   = 10   # % — empty room baseline
-MAX_BRIGHT   = 100  # % — full room
+MIN_BRIGHT   = 10
+MAX_BRIGHT   = 100
 
-# Lux thresholds for natural-light detection
-LUX_NATURAL_HIGH = 500   # bright outside → dim indoor lights
-LUX_NATURAL_LOW  = 150   # dark/evening   → boost indoor lights
+LUX_NATURAL_HIGH = 500
+LUX_NATURAL_LOW  = 150
 
-# Hour bands
 MORNING_START = 6
 MORNING_END   = 9
 EVENING_START = 17
 
-# People thresholds
-PEOPLE_ENERGY_MAX = 5   # ≤ this → energy save mode
-PEOPLE_GROUP_MAX  = 25  # ≤ this → group mode candidate
+PEOPLE_ENERGY_MAX = 5
+PEOPLE_GROUP_MAX  = 25
 
 
 # ══════════════════════════════════════════════════════════
 #  AUTO BRIGHTNESS ENGINE
-#  Maps people_count (0–50) → brightness % (10–100)
-#  Uses smooth anchored curve through 0/25/50 people targets
 # ══════════════════════════════════════════════════════════
 
-def auto_brightness_level(people_count: int | float) -> int:
-    """
-    Calculate target brightness percentage based on number of people.
-
-        Algorithm:
-            - Clamp input to [0, MAX_PEOPLE]
-            - Use a smooth quadratic curve anchored at:
-                    0 people  → 10%
-                 25 people  → 60%
-                 50 people  → 100%
-            - Clamp output to [MIN_BRIGHT, MAX_BRIGHT]
-
-    Returns:
-      int — brightness percentage 10–100
-    """
+# - แก้ไข Type Hint ให้รองรับ Python 3.9
+def auto_brightness_level(people_count: Union[int, float]) -> int:
     clamped = max(0.0, min(float(MAX_PEOPLE), float(people_count)))
 
     # Fit through anchor points (0,10), (25,60), (50,100)
@@ -120,29 +102,12 @@ def auto_brightness_level(people_count: int | float) -> int:
     return int(round(bounded))
 
 
-def brightness_to_lights(brightness_pct: int, base_lights: list[float]) -> list[float]:
-    """
-    Scale a 4-element light-intensity list by the auto brightness factor.
-
-    Args:
-      brightness_pct : int  — result from auto_brightness_level()
-      base_lights    : list — mode's default [l0, l1, l2, l3] (0.0–1.0)
-
-    Returns:
-      list[float] — scaled intensities, each clamped to [0.0, 1.0]
-    """
+def brightness_to_lights(brightness_pct: int, base_lights: List[float]) -> List[float]:
     factor = brightness_pct / 100.0
     return [min(1.0, max(0.0, l * factor)) for l in base_lights]
 
 
-def combined_brightness_level(people_count: int | float, lux: float) -> int:
-    """
-    Combine occupancy brightness with natural light influence.
-
-    - More people still raises target brightness.
-    - Higher lux dims indoor lights more aggressively.
-    - Lower lux allows a slight boost so the room does not feel flat.
-    """
+def combined_brightness_level(people_count: Union[int, float], lux: float) -> int:
     people_brightness = auto_brightness_level(people_count)
     lux_value = max(0.0, float(lux))
 
@@ -173,24 +138,9 @@ def recommend_mode(
     people_count: int,
     projector_on: bool,
     hour: int,
-) -> tuple:
-    """
-    Recommend a lighting mode based on sensor inputs.
-
-    Returns tuple of 5 values (matching app.py unpacking):
-      (mode_key, emoji, description, people_count, baseline_saving)
-
-    Priority order:
-      1. Projector on              → PRESENT_MODE
-      2. Morning + people > 0      → MORNING_MODE
-      3. Very few people (≤5)      → ENERGY_SAVE
-      4. High natural lux (≥500)   → AUTO_DIM
-      5. Small group (≤25)         → GROUP_MODE
-      6. Default                   → LECTURE_MODE
-    """
+) -> Tuple:
     is_morning = MORNING_START <= hour < MORNING_END
 
-    # Mode metadata: (key, emoji, description, baseline_saving%)
     META = {
         "PRESENT_MODE": ("PRESENT_MODE", "", "Projector on · Dim front lights",     45),
         "LECTURE_MODE": ("LECTURE_MODE", "", "Full brightness · No projector",       10),
@@ -200,7 +150,6 @@ def recommend_mode(
         "MORNING_MODE": ("MORNING_MODE", "", "Early class · Warm sunrise light",     20),
     }
 
-    # Rules
     if projector_on:
         key = "PRESENT_MODE"
     elif is_morning and people_count > 0:
@@ -219,7 +168,7 @@ def recommend_mode(
 
 
 # ══════════════════════════════════════════════════════════
-#  COMBINED STATE — single call for Streamlit
+#  COMBINED STATE
 # ══════════════════════════════════════════════════════════
 
 def get_full_ai_state(
@@ -227,28 +176,15 @@ def get_full_ai_state(
     lux: float,
     projector_on: bool,
     hour: int,
-    brightness_pct: int | float | None = None,
-) -> dict:
-    """
-    One-stop function that returns everything the UI needs.
-
-    Returns:
-      {
-        "mode"          : str   — recommended mode key
-        "brightness"    : int   — auto brightness % (10–100)
-        "lights_scaled" : list  — 4-element scaled light intensities
-        "projector"     : bool
-        "people"        : int
-        "lux"           : float
-        "hour"          : int
-        "saving_est"    : int   — estimated energy saving %
-        "reason"        : str   — human-readable explanation
-      }
-    """
+    brightness_pct: Optional[Union[int, float]] = None, # - แก้ไข Type Hint
+) -> Dict:
     mode, _, _, _, _ = recommend_mode(lux, people_count, projector_on, hour)
-    brightness  = int(round(brightness_pct)) if brightness_pct is not None else (0 if projector_on else auto_brightness_level(people_count))
+    
+    if brightness_pct is not None:
+        brightness = int(round(brightness_pct))
+    else:
+        brightness = 0 if projector_on else auto_brightness_level(people_count)
 
-    # Base light intensities per mode (mirrors scene_template.html MODES)
     BASE_LIGHTS = {
         "PRESENT_MODE" : [0.10, 0.65, 0.65, 0.10],
         "LECTURE_MODE" : [0.88, 1.00, 1.00, 0.88],
@@ -263,7 +199,6 @@ def get_full_ai_state(
     avg_int = sum(scaled) / 4.0
     saving  = int(round((1.0 - avg_int) * 100))
 
-    # Human-readable reason
     reasons = {
         "PRESENT_MODE" : f"Projector ON — dimming side lights, brightness {brightness}%",
         "LECTURE_MODE" : f"Full class ({people_count} people) — maximum brightness {brightness}%",
@@ -285,10 +220,6 @@ def get_full_ai_state(
         "reason"       : reasons.get(mode, f"Auto mode — brightness {brightness}%"),
     }
 
-
-# ══════════════════════════════════════════════════════════
-#  QUICK SELF-TEST  (python ai_logic.py)
-# ══════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     print("── Auto Brightness Mapping ──")

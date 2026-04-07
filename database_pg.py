@@ -1,9 +1,10 @@
 """
-database_pg.py — แทน database.py เดิม
-เปลี่ยน SQLite → PostgreSQL (Supabase)
+database_pg.py — ระบบจัดการฐานข้อมูล PostgreSQL (Supabase)
+รองรับ Python 3.9 และการซิงค์ข้อมูล Master Schedule
 """
 import os
 from contextlib import contextmanager
+from typing import Optional, List, Dict, Union, Tuple
 
 import psycopg2
 import psycopg2.extras
@@ -32,7 +33,6 @@ def _get_pool():
         )
     return _POOL
 
-
 @contextmanager
 def _conn():
     pool = _get_pool()
@@ -42,14 +42,12 @@ def _conn():
     finally:
         pool.putconn(conn)
 
-
 def _cache_data(ttl_sec: int = 10):
     def _decorator(func):
         if st is None:
             return func
         return st.cache_data(ttl=ttl_sec, show_spinner=False)(func)
     return _decorator
-
 
 def _clear_cached_reads(*fn_names: str) -> None:
     if st is None:
@@ -167,6 +165,32 @@ def delete_teacher_profile(name):
     _exec("DELETE FROM teacher_profiles WHERE teacher_name=%s", (name,))
     _clear_cached_reads("get_teacher_profiles")
 
+# ── Master Schedule (New) ──────────────────────
+@_cache_data(ttl_sec=20)
+def get_master_schedule(teacher_name: Optional[str] = None):
+    """ดึงข้อมูลจากตาราง master_schedule โดยอ่าน JSON ในคอลัมน์ subject"""
+    sql = """
+        SELECT 
+            ms.id, 
+            ms.day, 
+            ms.time as start_time, 
+            ms.time as end_time, 
+            ms.subject->>'code' as course_code, 
+            ms.subject->>'name' as course_name, 
+            c.teacher_name, 
+            c.default_projector as proj_default
+        FROM master_schedule ms
+        LEFT JOIN courses c ON (ms.subject->>'code') = c.course_code
+    """
+    
+    if teacher_name:
+        sql += " WHERE c.teacher_name = %s"
+        rows = _fetch(sql + " ORDER BY ms.day, ms.time", (teacher_name,))
+    else:
+        rows = _fetch(sql + " ORDER BY c.teacher_name, ms.day, ms.time")
+        
+    return [tuple(r.values()) for r in rows]
+
 @_cache_data(ttl_sec=20)
 def get_courses(teacher_name=None):
     if teacher_name:
@@ -269,25 +293,22 @@ def clear_all_logs():
         conn.commit()
     _clear_cached_reads("get_sensor_logs", "get_room_modes", "get_energy_logs", "get_activity_log", "get_summary")
 
-# ══════════════════════════════════════════════
-#  DELETE INDIVIDUAL ROWS
-# ══════════════════════════════════════════════
 def delete_sensor_log(log_id):
-    """ลบ sensor log ตาม ID"""
     _exec("DELETE FROM sensor_logs WHERE id=%s", (log_id,))
     _clear_cached_reads("get_sensor_logs", "get_room_modes", "get_energy_logs", "get_summary")
 
 def delete_room_mode(mode_id):
-    """ลบ room mode ตาม ID"""
     _exec("DELETE FROM room_modes WHERE id=%s", (mode_id,))
     _clear_cached_reads("get_room_modes", "get_energy_logs", "get_summary")
 
 def delete_energy_log(log_id):
-    """ลบ energy log ตาม ID"""
     _exec("DELETE FROM energy_logs WHERE id=%s", (log_id,))
     _clear_cached_reads("get_energy_logs", "get_summary")
 
 def delete_activity_log(log_id):
-    """ลบ activity log ตาม ID"""
     _exec("DELETE FROM activity_log WHERE id=%s", (log_id,))
     _clear_cached_reads("get_activity_log")
+
+# ══════════════════════════════════════════════
+#  SIMULATION SYNC
+# ══════════════════════════════════════════════

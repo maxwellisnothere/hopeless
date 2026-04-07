@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+from typing import Optional, Union # - เพิ่มเพื่อรองรับ Python 3.9
 from database_pg import (
     get_sensor_logs,
     get_room_modes,
@@ -19,7 +20,7 @@ from database_pg import (
 )
 
 
-def render_database_tabs(is_admin: bool, actor: str | None, actor_role: str):
+def render_database_tabs(is_admin: bool, actor: Optional[str], actor_role: str): # - แก้ไข Type Hint
     st.subheader("ฐานข้อมูล")
 
     admin_sections = [

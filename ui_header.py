@@ -1,6 +1,6 @@
 import streamlit as st
 from database_pg import get_teacher_profiles, log_activity
-
+from typing import Optional # เพิ่มการนำเข้า Optional เพื่อรองรับ Python 3.9
 
 def render_header():
     st.title("Smart Classroom Lighting")
@@ -11,8 +11,7 @@ def render_header():
         unsafe_allow_html=True,
     )
 
-
-def render_status_badge(is_admin: bool, actor: str | None):
+def render_status_badge(is_admin: bool, actor: Optional[str]): # แก้ไขจาก str | None เป็น Optional[str]
     lc = st.session_state.get("launch_course")
     if lc:
         st.markdown(

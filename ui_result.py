@@ -3,7 +3,7 @@ from ai_logic import recommend_mode
 from database_pg import save_all, log_activity, get_course_by_id
 from config import MODE_ICONS
 from utils import calc_energy
-
+from typing import Optional, Union # - เพิ่มเพื่อรองรับ Python 3.9
 
 ACCENT_MAP = {
     "PRESENT_MODE":  "#8B5CF6",
@@ -14,8 +14,8 @@ ACCENT_MAP = {
     "MORNING_MODE":  "#EC4899",
 }
 
-
-def render_result(is_admin: bool, actor: str | None, actor_role: str, chosen, new_proj: bool):
+# - แก้ไข Type Hint จาก str | None เป็น Optional[str]
+def render_result(is_admin: bool, actor: Optional[str], actor_role: str, chosen, new_proj: bool):
     st.subheader("AI Result")
 
     if "last_mode" not in st.session_state:
