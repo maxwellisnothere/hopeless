@@ -312,3 +312,17 @@ def delete_activity_log(log_id):
 # ══════════════════════════════════════════════
 #  SIMULATION SYNC
 # ══════════════════════════════════════════════
+
+def get_latest_sim_time():
+    """ดึงวันและเวลาจำลองล่าสุดจากตาราง simulation_status ที่ React ยิงเข้ามา"""
+    try:
+        rows = _fetch("SELECT sim_day, sim_time FROM simulation_status WHERE id = 1")
+        if rows:
+            day = rows[0]["sim_day"]
+            time_raw = rows[0]["sim_time"] # เช่น "08:45"
+            # ปัดเศษเป็นชั่วโมง (08:45 -> 08:00) เพื่อให้ตรงกับตารางสอน
+            hour_only = time_raw.split(":")[0] + ":00"
+            return day, hour_only
+    except Exception as e:
+        print(f"Error sync time: {e}")
+    return "Monday", "08:00"
