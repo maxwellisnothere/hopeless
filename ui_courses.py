@@ -74,11 +74,12 @@ def render_course_grid(is_admin: bool, actor: Optional[str]):
     display_schedules = []
     seen = set()
     for s in active_schedules:
-        # กำหนดกุญแจเช็คความซ้ำ (วัน, เวลา, รหัสวิชา, ชื่ออาจารย์)
-        key = (s[1], s[2], s[4], s[6])
-        if key not in seen:
-            seen.add(key)
-            display_schedules.append(s)
+        # ตรวจสอบว่าข้อมูลมีครบ 7 ตำแหน่งก่อนสร้าง key
+        if len(s) > 6:
+            key = (s[1], s[2], s[4], s[6])
+            if key not in seen:
+                seen.add(key)
+                display_schedules.append(s)
 
     if not display_schedules:
         st.warning(f"ขณะนี้ (วัน {sim_day} เวลา {sim_time} น.) ยังไม่มีการสอนในตารางครับ")
